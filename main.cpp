@@ -4,6 +4,8 @@
 #include <cmath> // sqrt, pow, floor用
 #include <unordered_map>
 #include <map>
+#include <vector>
+#include <sstream>
 
 // --- 前回設計したマスターデータ用の箱 ---
 struct PokemonBase {
@@ -16,8 +18,8 @@ struct PokemonBase {
 };
 
 // マスターデータを格納するグローバル変数（メイン関数等でCSVから読み込んでおく）
-extern std::unordered_map<std::string, PokemonBase> pokemon_db;
-extern std::map<double, double> cpm_db;
+std::unordered_map<std::string, PokemonBase> pokemon_db;
+std::map<double, double> cpm_db;
 
 // --- ユーザーのポケモン ---
 struct UserPokemon {
@@ -77,3 +79,67 @@ struct UserPokemon {
     }
 };
 
+// ユーザーの手持ちポケモン管理用
+std::vector<UserPokemon> my_box;
+int next_id = 1;
+
+int main() {
+    std::string line;
+    std::cout << "> ";
+    while (std::getline(std::cin, line)) {
+        if (line.empty()) {
+            std::cout << "> ";
+            continue;
+        }
+
+        std::istringstream iss(line);
+        std::string cmd;
+        if (!(iss >> cmd)) {
+            std::cout << "> ";
+            continue;
+        }
+
+        if (cmd == "add") {
+            std::string subcmd;
+            iss >> subcmd;
+            if (subcmd == "pokemon") {
+                std::string name;
+                double pl;
+                int aiv, biv, hiv;
+                if (iss >> name >> pl >> aiv >> biv >> hiv) {
+                    if (pl < 1.0 || pl > 50.0) {
+                        std::cout << "Error: PLは1.0から50.0の間で指定してください。" << std::endl;
+                    } else if (aiv < 0 || aiv > 15 || biv < 0 || biv > 15 || hiv < 0 || hiv > 15) {
+                        std::cout << "Error: 個体値は0から15の間で指定してください。" << std::endl;
+                    } else if (pokemon_db.find(name) == pokemon_db.end()) {
+                        std::cout << "Error: ポケモン '" << name << "' はデータベースに見つかりません。" << std::endl;
+                    } else {
+                        UserPokemon new_poke;
+                        new_poke.id = next_id;
+                        new_poke.name = name;
+                        new_poke.pl = pl;
+                        new_poke.aiv = aiv;
+                        new_poke.biv = biv;
+                        new_poke.hiv = hiv;
+                        new_poke.update_cp();
+                        my_box.push_back(new_poke);
+
+                        std::cout << "追加成功: ID=" << new_poke.id
+                                  << ", 名前=" << new_poke.name
+                                  << ", CP=" << new_poke.cp << std::endl;
+                        next_id++;
+                    }
+                } else {
+                    std::cout << "Usage: add pokemon <ポケモン名> <PL> <攻撃個体値> <防御個体値> <HP個体値>" << std::endl;
+                }
+            } else {
+                std::cout << "Unknown add command: " << subcmd << std::endl;
+            }
+        } else {
+            std::cout << "Unknown command: " << cmd << std::endl;
+        }
+
+        std::cout << "> ";
+    }
+    return 0;
+}
