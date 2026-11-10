@@ -6,6 +6,8 @@
 #include <map>
 #include <vector>
 #include <sstream>
+#include <algorithm>
+#include <iomanip>
 
 // --- 前回設計したマスターデータ用の箱 ---
 struct PokemonBase {
@@ -84,6 +86,7 @@ std::vector<UserPokemon> my_box;
 int next_id = 1;
 
 int main() {
+
     std::string line;
     std::cout << "> ";
     while (std::getline(std::cin, line)) {
@@ -134,6 +137,51 @@ int main() {
                 }
             } else {
                 std::cout << "Unknown add command: " << subcmd << std::endl;
+            }
+        } else if (cmd == "show") {
+            std::string subcmd;
+            iss >> subcmd;
+            if (subcmd == "pokemon") {
+                std::vector<const UserPokemon*> sorted_box;
+                for (const auto& poke : my_box) {
+                    sorted_box.push_back(&poke);
+                }
+                std::sort(sorted_box.begin(), sorted_box.end(), [](const UserPokemon* a, const UserPokemon* b) {
+                    return a->cp > b->cp; // CPが高い順
+                });
+
+                // ヘッダー的なもの（省略してもよいが、表形式っぽく見せるため）
+                // [ID, ポケモン名, CP, PL, 攻撃/防御/HP]
+                for (const auto* poke : sorted_box) {
+                    std::cout << "[" << std::setw(3) << std::right << poke->id << ", "
+                              << std::setw(15) << std::left << poke->name << ", "
+                              << "CP: " << std::setw(4) << std::right << poke->cp << ", "
+                              << "PL: " << std::setw(4) << std::left << poke->pl << ", "
+                              << "IVs: " << poke->aiv << "/" << poke->biv << "/" << poke->hiv << "]" << std::endl;
+                }
+            } else {
+                std::cout << "Unknown show command: " << subcmd << std::endl;
+            }
+        } else if (cmd == "delete") {
+            std::string subcmd;
+            iss >> subcmd;
+            if (subcmd == "pokemon") {
+                int id;
+                if (iss >> id) {
+                    auto it = std::find_if(my_box.begin(), my_box.end(), [id](const UserPokemon& poke) {
+                        return poke.id == id;
+                    });
+                    if (it != my_box.end()) {
+                        my_box.erase(it);
+                        // 削除成功メッセージ等（要件に明記はないが、エラーだけは出すとある）
+                    } else {
+                        std::cout << "Error: 指定されたIDのポケモンが見つかりません。" << std::endl;
+                    }
+                } else {
+                    std::cout << "Usage: delete pokemon <id>" << std::endl;
+                }
+            } else {
+                std::cout << "Unknown delete command: " << subcmd << std::endl;
             }
         } else {
             std::cout << "Unknown command: " << cmd << std::endl;
