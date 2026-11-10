@@ -8,6 +8,7 @@
 #include <sstream>
 #include <algorithm>
 #include <iomanip>
+#include <windows.h>
 
 // --- 前回設計したマスターデータ用の箱 ---
 struct PokemonBase {
@@ -305,6 +306,8 @@ void load_databases() {
 }
 
 int main() {
+    SetConsoleOutputCP(65001); // これがないと文字化けする
+    SetConsoleCP(65001);
     load_databases();
 
     std::string line;
