@@ -87,10 +87,9 @@ struct UserPokemon {
 
         // 2. 実質的なPL（相棒ブーストの処理）
         double effective_pl = pl;
-        if (has_buddy_boost) {
-            effective_pl += 1.0;
-            if (effective_pl > 51.0) effective_pl = 51.0; // 上限はPL51
-        }
+        if (has_buddy_boost) effective_pl += 1.0;
+        if (mega_level == 4 && !active_mega.empty()) effective_pl += 2.0; // メガシンカ中でメガレベル4なら+2
+        if (effective_pl > 55.0) effective_pl = 55.0; // 上限を51.0から55.0に引き上げ
 
         // 3. CPMをデータベースから検索
         auto cpm_it = cpm_db.find(effective_pl);
@@ -123,10 +122,9 @@ struct UserPokemon {
         const auto& base = poke_it->second;
 
         double effective_pl = pl;
-        if (has_buddy_boost) {
-            effective_pl += 1.0;
-            if (effective_pl > 51.0) effective_pl = 51.0;
-        }
+        if (has_buddy_boost) effective_pl += 1.0;
+        if (mega_level == 4 && !active_mega.empty()) effective_pl += 2.0; // メガシンカ中でメガレベル4なら+2
+        if (effective_pl > 55.0) effective_pl = 55.0; // 上限を51.0から55.0に引き上げ
 
         auto cpm_it = cpm_db.find(effective_pl);
         if (cpm_it == cpm_db.end()) return {};
@@ -305,10 +303,63 @@ void load_databases() {
     }
 }
 
+void save_box() {
+    std::ofstream ofs("my_box.csv");
+    for (const auto& p : my_box) {
+        ofs << p.id << "," << p.name << "," << p.pl << ","
+            << p.aiv << "," << p.biv << "," << p.hiv << ","
+            << (p.normalatk.empty() ? "none" : p.normalatk) << ","
+            << (p.specialatk.empty() ? "none" : p.specialatk) << ","
+            << (p.thaadatk.empty() ? "none" : p.thaadatk) << ","
+            << p.is_shadow << "," << p.is_purified << "," << p.is_lucky << ","
+            << p.has_buddy_boost << "," << p.mega_level << ","
+            << (p.active_mega.empty() ? "none" : p.active_mega) << ","
+            << (p.active_mega_move.empty() ? "none" : p.active_mega_move) << "\n";
+    }
+    std::cout << "ボックスを my_box.csv に保存しました（" << my_box.size() << "匹）" << std::endl;
+}
+
+void load_box() {
+    std::ifstream ifs("my_box.csv");
+    if (!ifs) return;
+    std::string line;
+    my_box.clear();
+    int max_id = 0;
+    while (std::getline(ifs, line)) {
+        if (line.empty()) continue;
+        auto cols = split_csv_line(line);
+        if (cols.size() >= 16) {
+            UserPokemon p;
+            p.id = std::stoi(cols[0]);
+            p.name = cols[1];
+            p.pl = std::stod(cols[2]);
+            p.aiv = std::stoi(cols[3]);
+            p.biv = std::stoi(cols[4]);
+            p.hiv = std::stoi(cols[5]);
+            p.normalatk = (cols[6] == "none" ? "" : cols[6]);
+            p.specialatk = (cols[7] == "none" ? "" : cols[7]);
+            p.thaadatk = (cols[8] == "none" ? "" : cols[8]);
+            p.is_shadow = std::stoi(cols[9]);
+            p.is_purified = std::stoi(cols[10]);
+            p.is_lucky = std::stoi(cols[11]);
+            p.has_buddy_boost = std::stoi(cols[12]);
+            p.mega_level = std::stoi(cols[13]);
+            p.active_mega = (cols[14] == "none" ? "" : cols[14]);
+            p.active_mega_move = (cols[15] == "none" ? "" : cols[15]);
+            p.update_cp();
+            my_box.push_back(p);
+            if (p.id > max_id) max_id = p.id;
+        }
+    }
+    next_id = max_id + 1;
+    std::cout << "my_box.csv から " << my_box.size() << "匹ロードしました" << std::endl;
+}
+
 int main() {
     SetConsoleOutputCP(65001); // これがないと文字化けする
     SetConsoleCP(65001);
     load_databases();
+    load_box();
 
     std::string line;
     std::cout << "> ";
@@ -321,6 +372,12 @@ int main() {
         std::istringstream iss(line);
         std::string cmd;
         if (!(iss >> cmd)) {
+            std::cout << "> ";
+            continue;
+        }
+
+        if (cmd == "save") {
+            save_box();
             std::cout << "> ";
             continue;
         }
