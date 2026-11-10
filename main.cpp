@@ -112,6 +112,71 @@ struct UserPokemon {
             cp = 10;
         }
     }
+
+    std::vector<std::pair<std::string, double>> calc_all_effective_dps() const {
+        if (normalatk.empty()) return {};
+
+        std::string search_name = active_mega.empty() ? name : active_mega;
+        auto poke_it = pokemon_db.find(search_name);
+        if (poke_it == pokemon_db.end()) return {};
+        const auto& base = poke_it->second;
+
+        double effective_pl = pl;
+        if (has_buddy_boost) {
+            effective_pl += 1.0;
+            if (effective_pl > 51.0) effective_pl = 51.0;
+        }
+
+        auto cpm_it = cpm_db.find(effective_pl);
+        if (cpm_it == cpm_db.end()) return {};
+        double cpm = cpm_it->second;
+
+        double a_actual = (base.attack + aiv) * cpm;
+
+        auto fast_it = fast_move_db.find(normalatk);
+        if (fast_it == fast_move_db.end()) return {};
+        const auto& fast = fast_it->second;
+
+        std::vector<std::pair<std::string, double>> results;
+        // specialatk, thaadatk, active_mega_move のうち、空文字でないもの
+        std::vector<std::string> target_moves;
+        if (!specialatk.empty()) target_moves.push_back(specialatk);
+        if (!thaadatk.empty()) target_moves.push_back(thaadatk);
+        if (!active_mega_move.empty()) target_moves.push_back(active_mega_move);
+
+        for (const auto& move_name : target_moves) {
+            auto charge_it = charge_move_db.find(move_name);
+            if (charge_it == charge_move_db.end()) continue;
+            const auto& charge = charge_it->second;
+
+            double p_s = charge.power;
+            if (move_name == active_mega_move) {
+                p_s *= (0.9 + 0.1 * mega_level);
+            }
+
+            double e_req = (charge.gauge == 1) ? 100.0 : (charge.gauge == 2) ? 50.0 : 33.0;
+            double e_gain = fast.time * fast.eps;
+            if (e_gain <= 0) continue; // 回避用
+
+            double n = std::ceil(e_req / e_gain);
+
+            double stab_n = (fast.type == base.type1 || fast.type == base.type2) ? 1.2 : 1.0;
+            double stab_s = (charge.type == base.type1 || charge.type == base.type2) ? 1.2 : 1.0;
+
+            double d_cycle = (fast.power * stab_n * n) + (p_s * stab_s);
+            double t_cycle = (fast.time * n) + charge.time;
+
+            if (t_cycle <= 0) continue;
+
+            double dps_base = d_cycle / t_cycle;
+            double shadow_bonus = is_shadow ? 1.2 : 1.0;
+            double effective_dps = dps_base * a_actual * 0.5 * shadow_bonus;
+
+            results.push_back({move_name, effective_dps});
+        }
+
+        return results;
+    }
 };
 
 #include <fstream>
