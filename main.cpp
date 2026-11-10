@@ -403,6 +403,49 @@ int main() {
             } else {
                 std::cout << "Unknown delete command: " << subcmd << std::endl;
             }
+        } else if (cmd == "calc") {
+            std::string subcmd;
+            iss >> subcmd;
+            if (subcmd == "dps") {
+                if (my_box.empty()) {
+                    std::cout << "Error: ボックスにポケモンがいません。" << std::endl;
+                } else {
+                    struct DpsRankingEntry {
+                        int id;
+                        std::string poke_name;
+                        std::string fast_move;
+                        std::string charge_move;
+                        double dps;
+                    };
+
+                    std::vector<DpsRankingEntry> ranking;
+                    for (const auto& poke : my_box) {
+                        auto results = poke.calc_all_effective_dps();
+                        std::string display_name = poke.active_mega.empty() ? poke.name : poke.active_mega;
+                        for (const auto& res : results) {
+                            ranking.push_back({poke.id, display_name, poke.normalatk, res.first, res.second});
+                        }
+                    }
+
+                    std::sort(ranking.begin(), ranking.end(), [](const DpsRankingEntry& a, const DpsRankingEntry& b) {
+                        return a.dps > b.dps;
+                    });
+
+                    std::ios_base::fmtflags f(std::cout.flags()); // format state backup
+                    int rank = 1;
+                    for (const auto& entry : ranking) {
+                        std::cout << "[" << std::setw(3) << std::right << rank << "] "
+                                  << "ID: " << std::setw(3) << std::right << entry.id << " | "
+                                  << std::setw(15) << std::left << entry.poke_name << " | "
+                                  << "DPS: " << std::fixed << std::setprecision(2) << std::setw(5) << std::right << entry.dps << " | "
+                                  << "技: " << entry.fast_move << " & " << entry.charge_move << std::endl;
+                        rank++;
+                    }
+                    std::cout.flags(f); // restore
+                }
+            } else {
+                std::cout << "Unknown calc command: " << subcmd << std::endl;
+            }
         } else if (cmd == "edit") {
             std::string subcmd;
             iss >> subcmd;
