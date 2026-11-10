@@ -22,6 +22,8 @@ struct PokemonBase {
 // マスターデータを格納するグローバル変数（メイン関数等でCSVから読み込んでおく）
 std::unordered_map<std::string, PokemonBase> pokemon_db;
 std::map<double, double> cpm_db;
+std::unordered_map<std::string, bool> fast_move_db;
+std::unordered_map<std::string, bool> charge_move_db;
 
 // --- ユーザーのポケモン ---
 struct UserPokemon {
@@ -236,6 +238,92 @@ int main() {
                     } else {
                         std::cout << "Error: 指定されたIDのポケモンが見つかりません。" << std::endl;
                     }
+                }
+            } else if (subcmd == "normalatk" || subcmd == "specialatk" || subcmd == "thaadatk") {
+                int id;
+                std::string move_name;
+                if (iss >> id >> move_name) {
+                    auto it = std::find_if(my_box.begin(), my_box.end(), [id](const UserPokemon& poke) {
+                        return poke.id == id;
+                    });
+                    if (it != my_box.end()) {
+                        if (subcmd == "normalatk") {
+                            if (fast_move_db.find(move_name) != fast_move_db.end()) {
+                                it->normalatk = move_name;
+                                std::cout << it->name << "のノーマルアタックを" << move_name << "に更新しました" << std::endl;
+                            } else {
+                                std::cout << "Error: わざ '" << move_name << "' はデータベースに見つかりません。" << std::endl;
+                            }
+                        } else if (subcmd == "specialatk" || subcmd == "thaadatk") {
+                            if (charge_move_db.find(move_name) != charge_move_db.end()) {
+                                if (subcmd == "specialatk") {
+                                    it->specialatk = move_name;
+                                    std::cout << it->name << "のスペシャルアタックを" << move_name << "に更新しました" << std::endl;
+                                } else {
+                                    it->thaadatk = move_name;
+                                    std::cout << it->name << "のサードアタックを" << move_name << "に更新しました" << std::endl;
+                                }
+                            } else {
+                                std::cout << "Error: わざ '" << move_name << "' はデータベースに見つかりません。" << std::endl;
+                            }
+                        }
+                    } else {
+                        std::cout << "Error: 指定されたIDのポケモンが見つかりません。" << std::endl;
+                    }
+                } else {
+                    std::cout << "Usage: edit " << subcmd << " <id> <わざ名>" << std::endl;
+                }
+            } else if (subcmd == "shadow" || subcmd == "purified" || subcmd == "lucky" || subcmd == "buddy") {
+                int id;
+                std::string val_str;
+                if (iss >> id >> val_str) {
+                    auto it = std::find_if(my_box.begin(), my_box.end(), [id](const UserPokemon& poke) {
+                        return poke.id == id;
+                    });
+                    if (it != my_box.end()) {
+                        bool val = false;
+                        if (val_str == "true" || val_str == "1") {
+                            val = true;
+                        } else if (val_str == "false" || val_str == "0") {
+                            val = false;
+                        } else {
+                            std::cout << "Error: 値は true/false または 1/0 で指定してください。" << std::endl;
+                            continue;
+                        }
+
+                        if (subcmd == "shadow") it->is_shadow = val;
+                        else if (subcmd == "purified") it->is_purified = val;
+                        else if (subcmd == "lucky") it->is_lucky = val;
+                        else if (subcmd == "buddy") it->has_buddy_boost = val;
+
+                        it->update_cp();
+                        std::cout << it->name << "の" << subcmd << "を" << (val ? "true" : "false") << "に更新しました（現在のCP: " << it->cp << "）" << std::endl;
+                    } else {
+                        std::cout << "Error: 指定されたIDのポケモンが見つかりません。" << std::endl;
+                    }
+                } else {
+                    std::cout << "Usage: edit " << subcmd << " <id> <true/false>" << std::endl;
+                }
+            } else if (subcmd == "megalevel") {
+                int id;
+                int val;
+                if (iss >> id >> val) {
+                    auto it = std::find_if(my_box.begin(), my_box.end(), [id](const UserPokemon& poke) {
+                        return poke.id == id;
+                    });
+                    if (it != my_box.end()) {
+                        if (val >= 0 && val <= 4) {
+                            it->mega_level = val;
+                            it->update_cp();
+                            std::cout << it->name << "のmegalevelを" << val << "に更新しました（現在のCP: " << it->cp << "）" << std::endl;
+                        } else {
+                            std::cout << "Error: megalevelは0から4の間で指定してください。" << std::endl;
+                        }
+                    } else {
+                        std::cout << "Error: 指定されたIDのポケモンが見つかりません。" << std::endl;
+                    }
+                } else {
+                    std::cout << "Usage: edit megalevel <id> <0~4>" << std::endl;
                 }
             } else {
                 std::cout << "Unknown edit command: " << subcmd << std::endl;
