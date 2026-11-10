@@ -19,11 +19,31 @@ struct PokemonBase {
     std::string type2;
 };
 
+struct FastMove {
+    std::string name;
+    std::string type;
+    int power;
+    double time;
+    double damage_window;
+    double eps;
+    double dps;
+};
+
+struct ChargeMove {
+    std::string name;
+    std::string type;
+    int power;
+    double time;
+    double damage_window;
+    double dps;
+    int gauge;
+};
+
 // マスターデータを格納するグローバル変数（メイン関数等でCSVから読み込んでおく）
 std::unordered_map<std::string, PokemonBase> pokemon_db;
 std::map<double, double> cpm_db;
-std::unordered_map<std::string, bool> fast_move_db;
-std::unordered_map<std::string, bool> charge_move_db;
+std::unordered_map<std::string, FastMove> fast_move_db;
+std::unordered_map<std::string, ChargeMove> charge_move_db;
 
 // --- ユーザーのポケモン ---
 struct UserPokemon {
@@ -83,11 +103,105 @@ struct UserPokemon {
     }
 };
 
+#include <fstream>
+
 // ユーザーの手持ちポケモン管理用
 std::vector<UserPokemon> my_box;
 int next_id = 1;
 
+// カンマ区切りの文字列を分割するヘルパー関数
+std::vector<std::string> split_csv(const std::string& line) {
+    std::vector<std::string> result;
+    std::stringstream ss(line);
+    std::string item;
+    while (std::getline(ss, item, ',')) {
+        result.push_back(item);
+    }
+    return result;
+}
+
+void load_master_data() {
+    std::string line;
+
+    // base.csv 読み込み
+    std::ifstream ifs_base("base.csv");
+    if (ifs_base) {
+        std::getline(ifs_base, line); // ヘッダースキップ
+        while (std::getline(ifs_base, line)) {
+            if (line.empty()) continue;
+            auto cols = split_csv(line);
+            if (cols.size() >= 6) {
+                PokemonBase p;
+                p.name = cols[0];
+                p.attack = std::stoi(cols[1]);
+                p.defense = std::stoi(cols[2]);
+                p.hp = std::stoi(cols[3]);
+                p.type1 = cols[4];
+                p.type2 = cols[5];
+                pokemon_db[p.name] = p;
+            }
+        }
+    }
+
+    // cpm.csv 読み込み
+    std::ifstream ifs_cpm("cpm.csv");
+    if (ifs_cpm) {
+        while (std::getline(ifs_cpm, line)) {
+            if (line.empty()) continue;
+            auto cols = split_csv(line);
+            if (cols.size() >= 2) {
+                double pl = std::stod(cols[0]);
+                double cpm = std::stod(cols[1]);
+                cpm_db[pl] = cpm;
+            }
+        }
+    }
+
+    // normal.csv 読み込み
+    std::ifstream ifs_normal("normal.csv");
+    if (ifs_normal) {
+        std::getline(ifs_normal, line); // ヘッダースキップ
+        while (std::getline(ifs_normal, line)) {
+            if (line.empty()) continue;
+            auto cols = split_csv(line);
+            if (cols.size() >= 7) {
+                FastMove fm;
+                fm.name = cols[0];
+                fm.type = cols[1];
+                fm.power = std::stoi(cols[2]);
+                fm.time = std::stod(cols[3]);
+                fm.damage_window = std::stod(cols[4]);
+                fm.eps = std::stod(cols[5]);
+                fm.dps = std::stod(cols[6]);
+                fast_move_db[fm.name] = fm;
+            }
+        }
+    }
+
+    // special.csv 読み込み
+    std::ifstream ifs_special("special.csv");
+    if (ifs_special) {
+        std::getline(ifs_special, line); // ヘッダースキップ
+        while (std::getline(ifs_special, line)) {
+            if (line.empty()) continue;
+            auto cols = split_csv(line);
+            if (cols.size() >= 7) {
+                ChargeMove cm;
+                cm.name = cols[0];
+                cm.type = cols[1];
+                cm.power = std::stoi(cols[2]);
+                cm.time = std::stod(cols[3]);
+                cm.damage_window = std::stod(cols[4]);
+                cm.dps = std::stod(cols[5]);
+                cm.gauge = std::stoi(cols[6]);
+                charge_move_db[cm.name] = cm;
+            }
+        }
+    }
+}
+
 int main() {
+    load_master_data();
 
     std::string line;
     std::cout << "> ";
