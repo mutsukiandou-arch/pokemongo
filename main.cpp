@@ -39,11 +39,18 @@ struct ChargeMove {
     int gauge;
 };
 
+struct MegaData {
+    std::string mega_name;
+    std::string base_name;
+    std::string exclusive_move;
+};
+
 // マスターデータを格納するグローバル変数（メイン関数等でCSVから読み込んでおく）
 std::unordered_map<std::string, PokemonBase> pokemon_db;
 std::map<double, double> cpm_db;
 std::unordered_map<std::string, FastMove> fast_move_db;
 std::unordered_map<std::string, ChargeMove> charge_move_db;
+std::unordered_map<std::string, MegaData> mega_db;
 
 // --- ユーザーのポケモン ---
 struct UserPokemon {
@@ -61,12 +68,16 @@ struct UserPokemon {
     bool has_buddy_boost = false;
     int mega_level = 0; // 0:なし, 1~3:メガシンカ状態(未実装の場合は0)
     
+    std::string active_mega = "";
+    std::string active_mega_move = "";
+
     int cp = 0;
 
     // CPを再計算して更新する関数
     void update_cp() {
         // 1. 種族値をデータベースから検索
-        auto poke_it = pokemon_db.find(name);
+        std::string search_name = active_mega.empty() ? name : active_mega;
+        auto poke_it = pokemon_db.find(search_name);
         if (poke_it == pokemon_db.end()) {
             cp = 0; // エラー時の安全処理
             return;
@@ -148,6 +159,7 @@ void load_databases() {
     // cpm.csv 読み込み
     std::ifstream ifs_cpm("cpm.csv");
     if (ifs_cpm) {
+        std::getline(ifs_cpm, line); // ヘッダースキップ
         while (std::getline(ifs_cpm, line)) {
             if (line.empty()) continue;
             auto cols = split_csv_line(line);
@@ -205,6 +217,25 @@ void load_databases() {
         }
     } else {
         std::cerr << "Error: special.csv を開けませんでした。" << std::endl;
+    }
+
+    // mega.csv 読み込み
+    std::ifstream ifs_mega("mega.csv");
+    if (ifs_mega) {
+        std::getline(ifs_mega, line); // ヘッダースキップ
+        while (std::getline(ifs_mega, line)) {
+            if (line.empty()) continue;
+            auto cols = split_csv_line(line);
+            if (cols.size() >= 3) {
+                MegaData md;
+                md.mega_name = cols[0];
+                md.base_name = cols[1];
+                md.exclusive_move = cols[2] == "n" ? "" : cols[2];
+                mega_db[md.mega_name] = md;
+            }
+        }
+    } else {
+        std::cerr << "Error: mega.csv を開けませんでした。" << std::endl;
     }
 }
 
@@ -446,6 +477,47 @@ int main() {
                     }
                 } else {
                     std::cout << "Usage: edit megalevel <id> <0~4>" << std::endl;
+                }
+            } else if (subcmd == "mega") {
+                int id;
+                std::string mega_name;
+                if (iss >> id >> mega_name) {
+                    auto it = std::find_if(my_box.begin(), my_box.end(), [id](const UserPokemon& poke) {
+                        return poke.id == id;
+                    });
+                    if (it != my_box.end()) {
+                        if (mega_name == "none") {
+                            it->active_mega = "";
+                            it->active_mega_move = "";
+                            it->update_cp();
+                            std::cout << "メガシンカを解除しました" << std::endl;
+                        } else {
+                            if (it->mega_level == 0) {
+                                std::cout << "Error: mega_levelが0のポケモンはメガシンカできません。" << std::endl;
+                            } else {
+                                auto mega_it = mega_db.find(mega_name);
+                                if (mega_it == mega_db.end()) {
+                                    std::cout << "Error: メガフォーム '" << mega_name << "' はデータベースに見つかりません。" << std::endl;
+                                } else if (mega_it->second.base_name != it->name) {
+                                    std::cout << "Error: メガフォーム '" << mega_name << "' はこのポケモン (" << it->name << ") のものではありません。" << std::endl;
+                                } else {
+                                    it->active_mega = mega_name;
+                                    it->active_mega_move = mega_it->second.exclusive_move;
+                                    it->update_cp();
+
+                                    std::cout << it->name << "は" << mega_name << "にメガシンカしました！";
+                                    if (!it->active_mega_move.empty()) {
+                                        std::cout << "固有技(" << it->active_mega_move << ")も習得しました。";
+                                    }
+                                    std::cout << "（現在のCP: " << it->cp << "）" << std::endl;
+                                }
+                            }
+                        }
+                    } else {
+                        std::cout << "Error: 指定されたIDのポケモンが見つかりません。" << std::endl;
+                    }
+                } else {
+                    std::cout << "Usage: edit mega <id> <メガフォーム名 または none>" << std::endl;
                 }
             } else {
                 std::cout << "Unknown edit command: " << subcmd << std::endl;
