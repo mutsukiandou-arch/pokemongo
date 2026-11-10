@@ -110,7 +110,7 @@ std::vector<UserPokemon> my_box;
 int next_id = 1;
 
 // カンマ区切りの文字列を分割するヘルパー関数
-std::vector<std::string> split_csv(const std::string& line) {
+std::vector<std::string> split_csv_line(const std::string& line) {
     std::vector<std::string> result;
     std::stringstream ss(line);
     std::string item;
@@ -120,7 +120,7 @@ std::vector<std::string> split_csv(const std::string& line) {
     return result;
 }
 
-void load_master_data() {
+void load_databases() {
     std::string line;
 
     // base.csv 読み込み
@@ -129,7 +129,7 @@ void load_master_data() {
         std::getline(ifs_base, line); // ヘッダースキップ
         while (std::getline(ifs_base, line)) {
             if (line.empty()) continue;
-            auto cols = split_csv(line);
+            auto cols = split_csv_line(line);
             if (cols.size() >= 6) {
                 PokemonBase p;
                 p.name = cols[0];
@@ -137,10 +137,12 @@ void load_master_data() {
                 p.defense = std::stoi(cols[2]);
                 p.hp = std::stoi(cols[3]);
                 p.type1 = cols[4];
-                p.type2 = cols[5];
+                p.type2 = cols[5] == "n" ? "" : cols[5];
                 pokemon_db[p.name] = p;
             }
         }
+    } else {
+        std::cerr << "Error: base.csv を開けませんでした。" << std::endl;
     }
 
     // cpm.csv 読み込み
@@ -148,13 +150,15 @@ void load_master_data() {
     if (ifs_cpm) {
         while (std::getline(ifs_cpm, line)) {
             if (line.empty()) continue;
-            auto cols = split_csv(line);
+            auto cols = split_csv_line(line);
             if (cols.size() >= 2) {
                 double pl = std::stod(cols[0]);
                 double cpm = std::stod(cols[1]);
                 cpm_db[pl] = cpm;
             }
         }
+    } else {
+        std::cerr << "Error: cpm.csv を開けませんでした。" << std::endl;
     }
 
     // normal.csv 読み込み
@@ -163,7 +167,7 @@ void load_master_data() {
         std::getline(ifs_normal, line); // ヘッダースキップ
         while (std::getline(ifs_normal, line)) {
             if (line.empty()) continue;
-            auto cols = split_csv(line);
+            auto cols = split_csv_line(line);
             if (cols.size() >= 7) {
                 FastMove fm;
                 fm.name = cols[0];
@@ -176,6 +180,8 @@ void load_master_data() {
                 fast_move_db[fm.name] = fm;
             }
         }
+    } else {
+        std::cerr << "Error: normal.csv を開けませんでした。" << std::endl;
     }
 
     // special.csv 読み込み
@@ -184,7 +190,7 @@ void load_master_data() {
         std::getline(ifs_special, line); // ヘッダースキップ
         while (std::getline(ifs_special, line)) {
             if (line.empty()) continue;
-            auto cols = split_csv(line);
+            auto cols = split_csv_line(line);
             if (cols.size() >= 7) {
                 ChargeMove cm;
                 cm.name = cols[0];
@@ -197,11 +203,13 @@ void load_master_data() {
                 charge_move_db[cm.name] = cm;
             }
         }
+    } else {
+        std::cerr << "Error: special.csv を開けませんでした。" << std::endl;
     }
 }
 
 int main() {
-    load_master_data();
+    load_databases();
 
     std::string line;
     std::cout << "> ";
