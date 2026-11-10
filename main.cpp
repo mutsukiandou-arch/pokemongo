@@ -183,6 +183,63 @@ int main() {
             } else {
                 std::cout << "Unknown delete command: " << subcmd << std::endl;
             }
+        } else if (cmd == "edit") {
+            std::string subcmd;
+            iss >> subcmd;
+
+            if (subcmd == "pl" || subcmd == "aiv" || subcmd == "biv" || subcmd == "hiv") {
+                int id;
+                if (iss >> id) {
+                    auto it = std::find_if(my_box.begin(), my_box.end(), [id](const UserPokemon& poke) {
+                        return poke.id == id;
+                    });
+                    if (it != my_box.end()) {
+                        if (subcmd == "pl") {
+                            double val;
+                            if (iss >> val) {
+                                if (val >= 1.0 && val <= 50.0) {
+                                    it->pl = val;
+                                    it->update_cp();
+                                    std::ios_base::fmtflags f(std::cout.flags()); // format state backup
+                                    std::cout << it->name << "のPLを" << std::fixed << std::setprecision(1) << val << "に更新しました（現在のCP: " << it->cp << "）" << std::endl;
+                                    std::cout.flags(f); // restore
+                                } else {
+                                    std::cout << "Error: PLは1.0から50.0の間で指定してください。" << std::endl;
+                                }
+                            } else {
+                                std::cout << "Error: 無効な数値フォーマットです。" << std::endl;
+                            }
+                        } else {
+                            int val;
+                            if (iss >> val) {
+                                if (val >= 0 && val <= 15) {
+                                    std::string attr_name;
+                                    if (subcmd == "aiv") {
+                                        it->aiv = val;
+                                        attr_name = "攻撃個体値";
+                                    } else if (subcmd == "biv") {
+                                        it->biv = val;
+                                        attr_name = "防御個体値";
+                                    } else if (subcmd == "hiv") {
+                                        it->hiv = val;
+                                        attr_name = "HP個体値";
+                                    }
+                                    it->update_cp();
+                                    std::cout << it->name << "の" << attr_name << "を" << val << "に更新しました（現在のCP: " << it->cp << "）" << std::endl;
+                                } else {
+                                    std::cout << "Error: 個体値は0から15の間で指定してください。" << std::endl;
+                                }
+                            } else {
+                                std::cout << "Error: 無効な数値フォーマットです。" << std::endl;
+                            }
+                        }
+                    } else {
+                        std::cout << "Error: 指定されたIDのポケモンが見つかりません。" << std::endl;
+                    }
+                }
+            } else {
+                std::cout << "Unknown edit command: " << subcmd << std::endl;
+            }
         } else {
             std::cout << "Unknown command: " << cmd << std::endl;
         }
