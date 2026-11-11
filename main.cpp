@@ -217,6 +217,10 @@ struct UserPokemon {
 std::vector<UserPokemon> my_box;
 int next_id = 1;
 
+void print_error(const std::string& msg) {
+    std::cout << "\033[31m" << msg << "\033[0m" << std::endl;
+}
+
 // カンマ区切りの文字列を分割するヘルパー関数
 std::vector<std::string> split_csv_line(const std::string& line) {
     std::vector<std::string> result;
@@ -284,7 +288,7 @@ void load_databases() {
             }
         }
     } else {
-        std::cerr << "Error: base.csv を開けませんでした。" << std::endl;
+        print_error("Error: base.csv を開けませんでした。");
     }
 
     // cpm.csv 読み込み
@@ -301,7 +305,7 @@ void load_databases() {
             }
         }
     } else {
-        std::cerr << "Error: cpm.csv を開けませんでした。" << std::endl;
+        print_error("Error: cpm.csv を開けませんでした。");
     }
 
     // normal.csv 読み込み
@@ -324,7 +328,7 @@ void load_databases() {
             }
         }
     } else {
-        std::cerr << "Error: normal.csv を開けませんでした。" << std::endl;
+        print_error("Error: normal.csv を開けませんでした。");
     }
 
     // special.csv 読み込み
@@ -347,7 +351,7 @@ void load_databases() {
             }
         }
     } else {
-        std::cerr << "Error: special.csv を開けませんでした。" << std::endl;
+        print_error("Error: special.csv を開けませんでした。");
     }
 
     // mega.csv 読み込み
@@ -366,7 +370,7 @@ void load_databases() {
             }
         }
     } else {
-        std::cerr << "Error: mega.csv を開けませんでした。" << std::endl;
+        print_error("Error: mega.csv を開けませんでした。");
     }
 }
 
@@ -429,8 +433,16 @@ void load_box() {
 
 int main() {
 #ifdef _WIN32
-    SetConsoleOutputCP(65001); // これがないと文字化けする
+    SetConsoleOutputCP(65001);
     SetConsoleCP(65001);
+    HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
+    if (hOut != INVALID_HANDLE_VALUE) {
+        DWORD dwMode = 0;
+        if (GetConsoleMode(hOut, &dwMode)) {
+            dwMode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
+            SetConsoleMode(hOut, dwMode);
+        }
+    }
 #endif
     load_databases();
     load_box();
@@ -465,11 +477,11 @@ int main() {
                 int aiv, biv, hiv;
                 if (iss >> name >> pl >> aiv >> biv >> hiv) {
                     if (pl < 1.0 || pl > 50.0) {
-                        std::cout << "Error: PLは1.0から50.0の間で指定してください。" << std::endl;
+                        print_error("Error: PLは1.0から50.0の間で指定してください。");
                     } else if (aiv < 0 || aiv > 15 || biv < 0 || biv > 15 || hiv < 0 || hiv > 15) {
-                        std::cout << "Error: 個体値は0から15の間で指定してください。" << std::endl;
+                        print_error("Error: 個体値は0から15の間で指定してください。");
                     } else if (pokemon_db.find(name) == pokemon_db.end()) {
-                        std::cout << "Error: ポケモン '" << name << "' はデータベースに見つかりません。" << std::endl;
+                        print_error("Error: ポケモン '" + name + "' はデータベースに見つかりません。");
                     } else {
                         UserPokemon new_poke;
                         new_poke.id = next_id;
@@ -516,7 +528,7 @@ int main() {
                         std::cout << "メガレベル: " << it->mega_level << std::endl;
                         std::cout << "保護状態: " << (it->is_protected ? "true" : "false") << std::endl;
                     } else {
-                        std::cout << "Error: 指定されたIDのポケモンが見つかりません。" << std::endl;
+                        print_error("Error: 指定されたIDのポケモンが見つかりません。");
                     }
                 } else {
                     std::vector<const UserPokemon*> sorted_box;
@@ -552,13 +564,13 @@ int main() {
                     });
                     if (it != my_box.end()) {
                         if (it->is_protected) {
-                            std::cout << "Error: このポケモンは保護されているため削除できません。" << std::endl;
+                            print_error("Error: このポケモンは保護されているため削除できません。");
                         } else {
                             my_box.erase(it);
                             // 削除成功メッセージ等（要件に明記はないが、エラーだけは出すとある）
                         }
                     } else {
-                        std::cout << "Error: 指定されたIDのポケモンが見つかりません。" << std::endl;
+                        print_error("Error: 指定されたIDのポケモンが見つかりません。");
                     }
                 } else {
                     std::cout << "Usage: delete pokemon <id>" << std::endl;
@@ -578,7 +590,7 @@ int main() {
                 if (!boss_name.empty()) {
                     auto poke_it = pokemon_db.find(boss_name);
                     if (poke_it == pokemon_db.end()) {
-                        std::cout << "Error: ボス '" << boss_name << "' はデータベースに見つかりません。" << std::endl;
+                        print_error("Error: ボス '" + boss_name + "' はデータベースに見つかりません。");
                         valid = false;
                     } else {
                         boss = &poke_it->second;
@@ -587,7 +599,7 @@ int main() {
 
                 if (valid) {
                     if (my_box.empty()) {
-                        std::cout << "Error: ボックスにポケモンがいません。" << std::endl;
+                        print_error("Error: ボックスにポケモンがいません。");
                     } else {
                         struct DpsRankingEntry {
                             int id;
@@ -643,7 +655,7 @@ int main() {
                     });
                     if (it != my_box.end()) {
                         if (it->is_protected) {
-                            std::cout << "Error: このポケモンは保護されているため編集できません。" << std::endl;
+                            print_error("Error: このポケモンは保護されているため編集できません。");
                         } else if (subcmd == "pl") {
                             double val;
                             if (iss >> val) {
@@ -654,10 +666,10 @@ int main() {
                                     std::cout << it->name << "のPLを" << std::fixed << std::setprecision(1) << val << "に更新しました（現在のCP: " << it->cp << "）" << std::endl;
                                     std::cout.flags(f); // restore
                                 } else {
-                                    std::cout << "Error: PLは1.0から50.0の間で指定してください。" << std::endl;
+                                    print_error("Error: PLは1.0から50.0の間で指定してください。");
                                 }
                             } else {
-                                std::cout << "Error: 無効な数値フォーマットです。" << std::endl;
+                                print_error("Error: 無効な数値フォーマットです。");
                             }
                         } else {
                             int val;
@@ -677,14 +689,14 @@ int main() {
                                     it->update_cp();
                                     std::cout << it->name << "の" << attr_name << "を" << val << "に更新しました（現在のCP: " << it->cp << "）" << std::endl;
                                 } else {
-                                    std::cout << "Error: 個体値は0から15の間で指定してください。" << std::endl;
+                                    print_error("Error: 個体値は0から15の間で指定してください。");
                                 }
                             } else {
-                                std::cout << "Error: 無効な数値フォーマットです。" << std::endl;
+                                print_error("Error: 無効な数値フォーマットです。");
                             }
                         }
                     } else {
-                        std::cout << "Error: 指定されたIDのポケモンが見つかりません。" << std::endl;
+                        print_error("Error: 指定されたIDのポケモンが見つかりません。");
                     }
                 }
             } else if (subcmd == "normalatk" || subcmd == "specialatk" || subcmd == "thaadatk") {
@@ -696,13 +708,13 @@ int main() {
                     });
                     if (it != my_box.end()) {
                         if (it->is_protected) {
-                            std::cout << "Error: このポケモンは保護されているため編集できません。" << std::endl;
+                            print_error("Error: このポケモンは保護されているため編集できません。");
                         } else if (subcmd == "normalatk") {
                             if (fast_move_db.find(move_name) != fast_move_db.end()) {
                                 it->normalatk = move_name;
                                 std::cout << it->name << "のノーマルアタックを" << move_name << "に更新しました" << std::endl;
                             } else {
-                                std::cout << "Error: わざ '" << move_name << "' はデータベースに見つかりません。" << std::endl;
+                                print_error("Error: わざ '" + move_name + "' はデータベースに見つかりません。");
                             }
                         } else if (subcmd == "specialatk" || subcmd == "thaadatk") {
                             if (charge_move_db.find(move_name) != charge_move_db.end()) {
@@ -714,11 +726,11 @@ int main() {
                                     std::cout << it->name << "のサードアタックを" << move_name << "に更新しました" << std::endl;
                                 }
                             } else {
-                                std::cout << "Error: わざ '" << move_name << "' はデータベースに見つかりません。" << std::endl;
+                                print_error("Error: わざ '" + move_name + "' はデータベースに見つかりません。");
                             }
                         }
                     } else {
-                        std::cout << "Error: 指定されたIDのポケモンが見つかりません。" << std::endl;
+                        print_error("Error: 指定されたIDのポケモンが見つかりません。");
                     }
                 } else {
                     std::cout << "Usage: edit " << subcmd << " <id> <わざ名>" << std::endl;
@@ -732,7 +744,7 @@ int main() {
                     });
                     if (it != my_box.end()) {
                         if (it->is_protected) {
-                            std::cout << "Error: このポケモンは保護されているため編集できません。" << std::endl;
+                            print_error("Error: このポケモンは保護されているため編集できません。");
                         } else {
                             bool val = false;
                             bool is_valid = true;
@@ -741,7 +753,7 @@ int main() {
                             } else if (val_str == "false" || val_str == "0") {
                                 val = false;
                             } else {
-                                std::cout << "Error: 値は true/false または 1/0 で指定してください。" << std::endl;
+                                print_error("Error: 値は true/false または 1/0 で指定してください。");
                                 is_valid = false;
                             }
 
@@ -756,7 +768,7 @@ int main() {
                             }
                         }
                     } else {
-                        std::cout << "Error: 指定されたIDのポケモンが見つかりません。" << std::endl;
+                        print_error("Error: 指定されたIDのポケモンが見つかりません。");
                     }
                 } else {
                     std::cout << "Usage: edit " << subcmd << " <id> <true/false>" << std::endl;
@@ -776,7 +788,7 @@ int main() {
                         } else if (val_str == "false" || val_str == "0") {
                             val = false;
                         } else {
-                            std::cout << "Error: 値は true/false または 1/0 で指定してください。" << std::endl;
+                            print_error("Error: 値は true/false または 1/0 で指定してください。");
                             is_valid = false;
                         }
 
@@ -785,7 +797,7 @@ int main() {
                             std::cout << it->name << "の保護状態を " << (val ? "true" : "false") << " に更新しました" << std::endl;
                         }
                     } else {
-                        std::cout << "Error: 指定されたIDのポケモンが見つかりません。" << std::endl;
+                        print_error("Error: 指定されたIDのポケモンが見つかりません。");
                     }
                 } else {
                     std::cout << "Usage: edit protection <id> <true/false>" << std::endl;
@@ -799,16 +811,16 @@ int main() {
                     });
                     if (it != my_box.end()) {
                         if (it->is_protected) {
-                            std::cout << "Error: このポケモンは保護されているため編集できません。" << std::endl;
+                            print_error("Error: このポケモンは保護されているため編集できません。");
                         } else if (val >= 0 && val <= 4) {
                             it->mega_level = val;
                             it->update_cp();
                             std::cout << it->name << "のmegalevelを" << val << "に更新しました（現在のCP: " << it->cp << "）" << std::endl;
                         } else {
-                            std::cout << "Error: megalevelは0から4の間で指定してください。" << std::endl;
+                            print_error("Error: megalevelは0から4の間で指定してください。");
                         }
                     } else {
-                        std::cout << "Error: 指定されたIDのポケモンが見つかりません。" << std::endl;
+                        print_error("Error: 指定されたIDのポケモンが見つかりません。");
                     }
                 } else {
                     std::cout << "Usage: edit megalevel <id> <0~4>" << std::endl;
