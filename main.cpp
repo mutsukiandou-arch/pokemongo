@@ -221,6 +221,38 @@ void print_error(const std::string& msg) {
     std::cout << "\033[31m" << msg << "\033[0m" << std::endl;
 }
 
+int get_display_width(const std::string& str) {
+    int width = 0;
+    for (size_t i = 0; i < str.length(); ) {
+        unsigned char c = str[i];
+        if (c < 0x80) { // 1 byte (ASCII)
+            width += 1;
+            i += 1;
+        } else if ((c & 0xE0) == 0xC0) { // 2 bytes
+            width += 2;
+            i += 2;
+        } else if ((c & 0xF0) == 0xE0) { // 3 bytes
+            width += 2;
+            i += 3;
+        } else if ((c & 0xF8) == 0xF0) { // 4 bytes
+            width += 2;
+            i += 4;
+        } else {
+            width += 1;
+            i += 1;
+        }
+    }
+    return width;
+}
+
+std::string pad_string(const std::string& str, int target_width) {
+    int current_width = get_display_width(str);
+    if (current_width >= target_width) {
+        return str;
+    }
+    return str + std::string(target_width - current_width, ' ');
+}
+
 // カンマ区切りの文字列を分割するヘルパー関数
 std::vector<std::string> split_csv_line(const std::string& line) {
     std::vector<std::string> result;
@@ -541,9 +573,13 @@ int main() {
 
                     // ヘッダー的なもの（省略してもよいが、表形式っぽく見せるため）
                     // [ID, ポケモン名, CP, PL, 攻撃/防御/HP]
+                    int max_name_width = 0;
+                    for (const auto* poke : sorted_box) {
+                        max_name_width = std::max(max_name_width, get_display_width(poke->name));
+                    }
                     for (const auto* poke : sorted_box) {
                         std::cout << "[" << std::setw(3) << std::right << poke->id << ", "
-                                  << std::setw(15) << std::left << poke->name << ", "
+                                  << pad_string(poke->name, max_name_width) << ", "
                                   << "CP: " << std::setw(4) << std::right << poke->cp << ", "
                                   << "PL: " << std::setw(4) << std::left << poke->pl << ", "
                                   << "IVs: " << poke->aiv << "/" << poke->biv << "/" << poke->hiv << "]" << std::endl;
@@ -656,13 +692,23 @@ int main() {
                 std::cout << "=== DPSランキング ===" << std::endl;
             }
 
+            int max_name_width = 0;
+            int max_fast_width = 0;
+            int max_charge_width = 0;
+            for (const auto& entry : ranking) {
+                max_name_width = std::max(max_name_width, get_display_width(entry.form_name));
+                max_fast_width = std::max(max_fast_width, get_display_width(entry.fast_move));
+                max_charge_width = std::max(max_charge_width, get_display_width(entry.charge_move));
+            }
+
             int rank = 1;
             for (const auto& entry : ranking) {
                 std::cout << "[" << std::setw(3) << std::right << rank << "] "
                           << "ID: " << std::setw(3) << std::right << entry.id << " | "
-                          << std::setw(15) << std::left << entry.form_name << " | "
+                          << pad_string(entry.form_name, max_name_width) << " | "
                           << "DPS: " << std::fixed << std::setprecision(2) << std::setw(7) << std::right << entry.dps << " | "
-                          << "技: " << entry.fast_move << " & " << entry.charge_move << std::endl;
+                          << "技: " << pad_string(entry.fast_move, max_fast_width) << " & "
+                          << pad_string(entry.charge_move, max_charge_width) << std::endl;
                 rank++;
             }
             std::cout.flags(f);
