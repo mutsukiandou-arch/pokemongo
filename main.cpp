@@ -380,6 +380,7 @@ void save_box() {
             << (p.thaadatk.empty() ? "none" : p.thaadatk) << ","
             << p.is_shadow << "," << p.is_purified << "," << p.is_lucky << ","
             << p.has_buddy_boost << "," << p.mega_level << ","
+            << "none" << "," << "none" << ","
             << p.is_protected << "\n";
     }
     std::cout << "ボックスを my_box.csv に保存しました（" << my_box.size() << "匹）" << std::endl;
@@ -569,40 +570,63 @@ int main() {
             std::string subcmd;
             iss >> subcmd;
             if (subcmd == "dps") {
-                if (my_box.empty()) {
-                    std::cout << "Error: ボックスにポケモンがいません。" << std::endl;
-                } else {
-                    struct DpsRankingEntry {
-                        int id;
-                        std::string form_name;
-                        std::string fast_move;
-                        std::string charge_move;
-                        double dps;
-                    };
+                std::string boss_name = "";
+                iss >> boss_name;
 
-                    std::vector<DpsRankingEntry> ranking;
-                    for (const auto& poke : my_box) {
-                        auto results = poke.calc_all_effective_dps();
-                        for (const auto& res : results) {
-                            ranking.push_back({poke.id, res.form_name, poke.normalatk, res.charge_move, res.dps});
+                const PokemonBase* boss = nullptr;
+                bool valid = true;
+                if (!boss_name.empty()) {
+                    auto poke_it = pokemon_db.find(boss_name);
+                    if (poke_it == pokemon_db.end()) {
+                        std::cout << "Error: ボス '" << boss_name << "' はデータベースに見つかりません。" << std::endl;
+                        valid = false;
+                    } else {
+                        boss = &poke_it->second;
+                    }
+                }
+
+                if (valid) {
+                    if (my_box.empty()) {
+                        std::cout << "Error: ボックスにポケモンがいません。" << std::endl;
+                    } else {
+                        struct DpsRankingEntry {
+                            int id;
+                            std::string form_name;
+                            std::string fast_move;
+                            std::string charge_move;
+                            double dps;
+                        };
+
+                        std::vector<DpsRankingEntry> ranking;
+                        for (const auto& poke : my_box) {
+                            auto results = poke.calc_all_effective_dps(boss);
+                            for (const auto& res : results) {
+                                ranking.push_back({poke.id, res.form_name, poke.normalatk, res.charge_move, res.dps});
+                            }
                         }
-                    }
 
-                    std::sort(ranking.begin(), ranking.end(), [](const DpsRankingEntry& a, const DpsRankingEntry& b) {
-                        return a.dps > b.dps;
-                    });
+                        std::sort(ranking.begin(), ranking.end(), [](const DpsRankingEntry& a, const DpsRankingEntry& b) {
+                            return a.dps > b.dps;
+                        });
 
-                    std::ios_base::fmtflags f(std::cout.flags()); // format state backup
-                    int rank = 1;
-                    for (const auto& entry : ranking) {
-                        std::cout << "[" << std::setw(3) << std::right << rank << "] "
-                                  << "ID: " << std::setw(3) << std::right << entry.id << " | "
-                                  << std::setw(15) << std::left << entry.form_name << " | "
-                                  << "DPS: " << std::fixed << std::setprecision(2) << std::setw(5) << std::right << entry.dps << " | "
-                                  << "技: " << entry.fast_move << " & " << entry.charge_move << std::endl;
-                        rank++;
+                        if (!boss_name.empty()) {
+                            std::cout << "=== 対 " << boss_name << " DPSランキング ===" << std::endl;
+                        } else {
+                            std::cout << "=== DPSランキング ===" << std::endl;
+                        }
+
+                        std::ios_base::fmtflags f(std::cout.flags()); // format state backup
+                        int rank = 1;
+                        for (const auto& entry : ranking) {
+                            std::cout << "[" << std::setw(3) << std::right << rank << "] "
+                                      << "ID: " << std::setw(3) << std::right << entry.id << " | "
+                                      << std::setw(15) << std::left << entry.form_name << " | "
+                                      << "DPS: " << std::fixed << std::setprecision(2) << std::setw(5) << std::right << entry.dps << " | "
+                                      << "技: " << entry.fast_move << " & " << entry.charge_move << std::endl;
+                            rank++;
+                        }
+                        std::cout.flags(f); // restore
                     }
-                    std::cout.flags(f); // restore
                 }
             } else {
                 std::cout << "Unknown calc command: " << subcmd << std::endl;
