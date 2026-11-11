@@ -72,6 +72,8 @@ struct UserPokemon {
     std::string active_mega = "";
     std::string active_mega_move = "";
 
+    bool is_protected = false;
+
     int cp = 0;
 
     // CPを再計算して更新する関数
@@ -314,7 +316,8 @@ void save_box() {
             << p.is_shadow << "," << p.is_purified << "," << p.is_lucky << ","
             << p.has_buddy_boost << "," << p.mega_level << ","
             << (p.active_mega.empty() ? "none" : p.active_mega) << ","
-            << (p.active_mega_move.empty() ? "none" : p.active_mega_move) << "\n";
+            << (p.active_mega_move.empty() ? "none" : p.active_mega_move) << ","
+            << p.is_protected << "\n";
     }
     std::cout << "ボックスを my_box.csv に保存しました（" << my_box.size() << "匹）" << std::endl;
 }
@@ -346,6 +349,11 @@ void load_box() {
             p.mega_level = std::stoi(cols[13]);
             p.active_mega = (cols[14] == "none" ? "" : cols[14]);
             p.active_mega_move = (cols[15] == "none" ? "" : cols[15]);
+            if (cols.size() >= 17) {
+                p.is_protected = std::stoi(cols[16]);
+            } else {
+                p.is_protected = false;
+            }
             p.update_cp();
             my_box.push_back(p);
             if (p.id > max_id) max_id = p.id;
@@ -624,6 +632,31 @@ int main() {
                     }
                 } else {
                     std::cout << "Usage: edit " << subcmd << " <id> <true/false>" << std::endl;
+                }
+            } else if (subcmd == "protection") {
+                int id;
+                std::string val_str;
+                if (iss >> id >> val_str) {
+                    auto it = std::find_if(my_box.begin(), my_box.end(), [id](const UserPokemon& poke) {
+                        return poke.id == id;
+                    });
+                    if (it != my_box.end()) {
+                        bool val = false;
+                        if (val_str == "true" || val_str == "1") {
+                            val = true;
+                        } else if (val_str == "false" || val_str == "0") {
+                            val = false;
+                        } else {
+                            std::cout << "Error: 値は true/false または 1/0 で指定してください。" << std::endl;
+                            continue;
+                        }
+                        it->is_protected = val;
+                        std::cout << it->name << "の保護状態を " << (val ? "true" : "false") << " に更新しました" << std::endl;
+                    } else {
+                        std::cout << "Error: 指定されたIDのポケモンが見つかりません。" << std::endl;
+                    }
+                } else {
+                    std::cout << "Usage: edit protection <id> <true/false>" << std::endl;
                 }
             } else if (subcmd == "megalevel") {
                 int id;
