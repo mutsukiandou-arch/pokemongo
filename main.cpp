@@ -12,6 +12,8 @@
 #include <windows.h>
 #endif
 
+double get_type_multiplier(const std::string& atk_type, const std::string& def_type1, const std::string& def_type2);
+
 // --- 前回設計したマスターデータ用の箱 ---
 struct PokemonBase {
     std::string name;
@@ -56,6 +58,12 @@ std::unordered_map<std::string, ChargeMove> charge_move_db;
 std::unordered_map<std::string, MegaData> mega_db;
 
 // --- ユーザーのポケモン ---
+struct DpsResult {
+    std::string form_name;
+    std::string charge_move;
+    double dps;
+};
+
 struct UserPokemon {
     int id;
     std::string name;
@@ -70,9 +78,6 @@ struct UserPokemon {
     bool is_lucky = false;
     bool has_buddy_boost = false;
     int mega_level = 0; // 0:なし, 1~3:メガシンカ状態(未実装の場合は0)
-    
-    std::string active_mega = "";
-    std::string active_mega_move = "";
 
     bool is_protected = false;
 
@@ -81,7 +86,7 @@ struct UserPokemon {
     // CPを再計算して更新する関数
     void update_cp() {
         // 1. 種族値をデータベースから検索
-        std::string search_name = active_mega.empty() ? name : active_mega;
+        std::string search_name = name;
         auto poke_it = pokemon_db.find(search_name);
         if (poke_it == pokemon_db.end()) {
             cp = 0; // エラー時の安全処理
@@ -92,7 +97,6 @@ struct UserPokemon {
         // 2. 実質的なPL（相棒ブーストの処理）
         double effective_pl = pl;
         if (has_buddy_boost) effective_pl += 1.0;
-        if (mega_level == 4 && !active_mega.empty()) effective_pl += 2.0; // メガシンカ中でメガレベル4なら+2
         if (effective_pl > 55.0) effective_pl = 55.0; // 上限を51.0から55.0に引き上げ
 
         // 3. CPMをデータベースから検索
@@ -117,67 +121,92 @@ struct UserPokemon {
         }
     }
 
-    std::vector<std::pair<std::string, double>> calc_all_effective_dps() const {
+    std::vector<DpsResult> calc_all_effective_dps(const PokemonBase* boss = nullptr) const {
         if (normalatk.empty()) return {};
 
-        std::string search_name = active_mega.empty() ? name : active_mega;
-        auto poke_it = pokemon_db.find(search_name);
-        if (poke_it == pokemon_db.end()) return {};
-        const auto& base = poke_it->second;
+        std::vector<std::string> target_forms;
+        target_forms.push_back(name);
 
-        double effective_pl = pl;
-        if (has_buddy_boost) effective_pl += 1.0;
-        if (mega_level == 4 && !active_mega.empty()) effective_pl += 2.0; // メガシンカ中でメガレベル4なら+2
-        if (effective_pl > 55.0) effective_pl = 55.0; // 上限を51.0から55.0に引き上げ
+        if (mega_level > 0) {
+            for (const auto& pair : mega_db) {
+                if (pair.second.base_name == name) {
+                    target_forms.push_back(pair.second.mega_name);
+                }
+            }
+        }
 
-        auto cpm_it = cpm_db.find(effective_pl);
-        if (cpm_it == cpm_db.end()) return {};
-        double cpm = cpm_it->second;
-
-        double a_actual = (base.attack + aiv) * cpm;
-
+        std::vector<DpsResult> results;
         auto fast_it = fast_move_db.find(normalatk);
         if (fast_it == fast_move_db.end()) return {};
         const auto& fast = fast_it->second;
 
-        std::vector<std::pair<std::string, double>> results;
-        // specialatk, thaadatk, active_mega_move のうち、空文字でないもの
-        std::vector<std::string> target_moves;
-        if (!specialatk.empty()) target_moves.push_back(specialatk);
-        if (!thaadatk.empty()) target_moves.push_back(thaadatk);
-        if (!active_mega_move.empty()) target_moves.push_back(active_mega_move);
+        for (const auto& form_name : target_forms) {
+            auto poke_it = pokemon_db.find(form_name);
+            if (poke_it == pokemon_db.end()) continue;
+            const auto& base = poke_it->second;
 
-        for (const auto& move_name : target_moves) {
-            auto charge_it = charge_move_db.find(move_name);
-            if (charge_it == charge_move_db.end()) continue;
-            const auto& charge = charge_it->second;
+            double effective_pl = pl;
+            if (has_buddy_boost) effective_pl += 1.0;
+            if (form_name != name && mega_level == 4) effective_pl += 2.0;
+            if (effective_pl > 55.0) effective_pl = 55.0;
 
-            double p_s = charge.power;
-            if (move_name == active_mega_move) {
-                p_s *= (0.9 + 0.1 * mega_level);
+            auto cpm_it = cpm_db.find(effective_pl);
+            if (cpm_it == cpm_db.end()) continue;
+            double cpm = cpm_it->second;
+
+            double a_actual = (base.attack + aiv) * cpm;
+
+            std::vector<std::string> target_moves;
+            if (!specialatk.empty()) target_moves.push_back(specialatk);
+            if (!thaadatk.empty()) target_moves.push_back(thaadatk);
+
+            std::string exclusive_move = "";
+            if (form_name != name) {
+                auto mega_it = mega_db.find(form_name);
+                if (mega_it != mega_db.end() && !mega_it->second.exclusive_move.empty()) {
+                    exclusive_move = mega_it->second.exclusive_move;
+                    target_moves.push_back(exclusive_move);
+                }
             }
 
-            double e_req = (charge.gauge == 1) ? 100.0 : (charge.gauge == 2) ? 50.0 : 33.0;
-            double e_gain = fast.time * fast.eps;
-            if (e_gain <= 0) continue; // 回避用
+            for (const auto& move_name : target_moves) {
+                auto charge_it = charge_move_db.find(move_name);
+                if (charge_it == charge_move_db.end()) continue;
+                const auto& charge = charge_it->second;
 
-            double n = std::ceil(e_req / e_gain);
+                double p_s = charge.power;
+                if (form_name != name && move_name == exclusive_move) {
+                    p_s *= (0.9 + 0.1 * mega_level);
+                }
 
-            double stab_n = (fast.type == base.type1 || fast.type == base.type2) ? 1.2 : 1.0;
-            double stab_s = (charge.type == base.type1 || charge.type == base.type2) ? 1.2 : 1.0;
+                double e_req = (charge.gauge == 1) ? 100.0 : (charge.gauge == 2) ? 50.0 : 33.0;
+                double e_gain = fast.time * fast.eps;
+                if (e_gain <= 0) continue;
 
-            double d_cycle = (fast.power * stab_n * n) + (p_s * stab_s);
-            double t_cycle = (fast.time * n) + charge.time;
+                double n = std::ceil(e_req / e_gain);
 
-            if (t_cycle <= 0) continue;
+                double stab_n = (fast.type == base.type1 || fast.type == base.type2) ? 1.2 : 1.0;
+                double stab_s = (charge.type == base.type1 || charge.type == base.type2) ? 1.2 : 1.0;
 
-            double dps_base = d_cycle / t_cycle;
-            double shadow_bonus = is_shadow ? 1.2 : 1.0;
-            double effective_dps = dps_base * a_actual * 0.5 * shadow_bonus;
+                double eff_n = 1.0;
+                double eff_s = 1.0;
+                if (boss != nullptr) {
+                    eff_n = get_type_multiplier(fast.type, boss->type1, boss->type2);
+                    eff_s = get_type_multiplier(charge.type, boss->type1, boss->type2);
+                }
 
-            results.push_back({move_name, effective_dps});
+                double d_cycle = (fast.power * stab_n * eff_n * n) + (p_s * stab_s * eff_s);
+                double t_cycle = (fast.time * n) + charge.time;
+
+                if (t_cycle <= 0) continue;
+
+                double dps_base = d_cycle / t_cycle;
+                double shadow_bonus = is_shadow ? 1.2 : 1.0;
+                double effective_dps = dps_base * a_actual * 0.5 * shadow_bonus;
+
+                results.push_back({form_name, move_name, effective_dps});
+            }
         }
-
         return results;
     }
 };
@@ -351,8 +380,6 @@ void save_box() {
             << (p.thaadatk.empty() ? "none" : p.thaadatk) << ","
             << p.is_shadow << "," << p.is_purified << "," << p.is_lucky << ","
             << p.has_buddy_boost << "," << p.mega_level << ","
-            << (p.active_mega.empty() ? "none" : p.active_mega) << ","
-            << (p.active_mega_move.empty() ? "none" : p.active_mega_move) << ","
             << p.is_protected << "\n";
     }
     std::cout << "ボックスを my_box.csv に保存しました（" << my_box.size() << "匹）" << std::endl;
@@ -367,7 +394,7 @@ void load_box() {
     while (std::getline(ifs, line)) {
         if (line.empty()) continue;
         auto cols = split_csv_line(line);
-        if (cols.size() >= 16) {
+        if (cols.size() >= 15) {
             UserPokemon p;
             p.id = std::stoi(cols[0]);
             p.name = cols[1];
@@ -383,10 +410,10 @@ void load_box() {
             p.is_lucky = std::stoi(cols[11]);
             p.has_buddy_boost = std::stoi(cols[12]);
             p.mega_level = std::stoi(cols[13]);
-            p.active_mega = (cols[14] == "none" ? "" : cols[14]);
-            p.active_mega_move = (cols[15] == "none" ? "" : cols[15]);
             if (cols.size() >= 17) {
                 p.is_protected = std::stoi(cols[16]);
+            } else if (cols.size() >= 15) {
+                p.is_protected = std::stoi(cols[14]);
             } else {
                 p.is_protected = false;
             }
@@ -475,14 +502,12 @@ int main() {
                     });
                     if (it != my_box.end()) {
                         std::cout << "=== ポケモン詳細情報 ===" << std::endl;
-                        std::cout << "ID: " << it->id << " | 名前: " << it->name
-                                  << " (メガシンカ: " << (it->active_mega.empty() ? "なし" : it->active_mega) << ")" << std::endl;
+                        std::cout << "ID: " << it->id << " | 名前: " << it->name << std::endl;
                         std::cout << "CP: " << it->cp << " | PL: " << it->pl << std::endl;
                         std::cout << "個体値: 攻撃 " << it->aiv << " / 防御 " << it->biv << " / HP " << it->hiv << std::endl;
                         std::cout << "ノーマル技: " << (it->normalatk.empty() ? "未設定" : it->normalatk) << std::endl;
                         std::cout << "スペシャル技: " << (it->specialatk.empty() ? "未設定" : it->specialatk) << std::endl;
                         std::cout << "サード技: " << (it->thaadatk.empty() ? "未設定" : it->thaadatk) << std::endl;
-                        std::cout << "メガ固有技: " << (it->active_mega_move.empty() ? "なし" : it->active_mega_move) << std::endl;
                         std::cout << "特殊状態: シャドウ: " << (it->is_shadow ? "true" : "false")
                                   << " / ライト: " << (it->is_purified ? "true" : "false")
                                   << " / キラ: " << (it->is_lucky ? "true" : "false") << std::endl;
@@ -549,7 +574,7 @@ int main() {
                 } else {
                     struct DpsRankingEntry {
                         int id;
-                        std::string poke_name;
+                        std::string form_name;
                         std::string fast_move;
                         std::string charge_move;
                         double dps;
@@ -558,9 +583,8 @@ int main() {
                     std::vector<DpsRankingEntry> ranking;
                     for (const auto& poke : my_box) {
                         auto results = poke.calc_all_effective_dps();
-                        std::string display_name = poke.active_mega.empty() ? poke.name : poke.active_mega;
                         for (const auto& res : results) {
-                            ranking.push_back({poke.id, display_name, poke.normalatk, res.first, res.second});
+                            ranking.push_back({poke.id, res.form_name, poke.normalatk, res.charge_move, res.dps});
                         }
                     }
 
@@ -573,7 +597,7 @@ int main() {
                     for (const auto& entry : ranking) {
                         std::cout << "[" << std::setw(3) << std::right << rank << "] "
                                   << "ID: " << std::setw(3) << std::right << entry.id << " | "
-                                  << std::setw(15) << std::left << entry.poke_name << " | "
+                                  << std::setw(15) << std::left << entry.form_name << " | "
                                   << "DPS: " << std::fixed << std::setprecision(2) << std::setw(5) << std::right << entry.dps << " | "
                                   << "技: " << entry.fast_move << " & " << entry.charge_move << std::endl;
                         rank++;
@@ -764,49 +788,6 @@ int main() {
                     }
                 } else {
                     std::cout << "Usage: edit megalevel <id> <0~4>" << std::endl;
-                }
-            } else if (subcmd == "mega") {
-                int id;
-                std::string mega_name;
-                if (iss >> id >> mega_name) {
-                    auto it = std::find_if(my_box.begin(), my_box.end(), [id](const UserPokemon& poke) {
-                        return poke.id == id;
-                    });
-                    if (it != my_box.end()) {
-                        if (it->is_protected) {
-                            std::cout << "Error: このポケモンは保護されているため編集できません。" << std::endl;
-                        } else if (mega_name == "none") {
-                            it->active_mega = "";
-                            it->active_mega_move = "";
-                            it->update_cp();
-                            std::cout << "メガシンカを解除しました" << std::endl;
-                        } else {
-                            if (it->mega_level == 0) {
-                                std::cout << "Error: mega_levelが0のポケモンはメガシンカできません。" << std::endl;
-                            } else {
-                                auto mega_it = mega_db.find(mega_name);
-                                if (mega_it == mega_db.end()) {
-                                    std::cout << "Error: メガフォーム '" << mega_name << "' はデータベースに見つかりません。" << std::endl;
-                                } else if (mega_it->second.base_name != it->name) {
-                                    std::cout << "Error: メガフォーム '" << mega_name << "' はこのポケモン (" << it->name << ") のものではありません。" << std::endl;
-                                } else {
-                                    it->active_mega = mega_name;
-                                    it->active_mega_move = mega_it->second.exclusive_move;
-                                    it->update_cp();
-
-                                    std::cout << it->name << "は" << mega_name << "にメガシンカしました！";
-                                    if (!it->active_mega_move.empty()) {
-                                        std::cout << "固有技(" << it->active_mega_move << ")も習得しました。";
-                                    }
-                                    std::cout << "（現在のCP: " << it->cp << "）" << std::endl;
-                                }
-                            }
-                        }
-                    } else {
-                        std::cout << "Error: 指定されたIDのポケモンが見つかりません。" << std::endl;
-                    }
-                } else {
-                    std::cout << "Usage: edit mega <id> <メガフォーム名 または none>" << std::endl;
                 }
             } else {
                 std::cout << "Unknown edit command: " << subcmd << std::endl;
