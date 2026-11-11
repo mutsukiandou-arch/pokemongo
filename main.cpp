@@ -194,6 +194,9 @@ std::vector<std::string> split_csv_line(const std::string& line) {
     std::stringstream ss(line);
     std::string item;
     while (std::getline(ss, item, ',')) {
+        if (!item.empty() && item.back() == '\r') {
+            item.pop_back();
+        }
         result.push_back(item);
     }
     return result;
