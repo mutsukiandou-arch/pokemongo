@@ -8,7 +8,9 @@
 #include <sstream>
 #include <algorithm>
 #include <iomanip>
+#ifdef _WIN32
 #include <windows.h>
+#endif
 
 // --- 前回設計したマスターデータ用の箱 ---
 struct PokemonBase {
@@ -364,8 +366,10 @@ void load_box() {
 }
 
 int main() {
+#ifdef _WIN32
     SetConsoleOutputCP(65001); // これがないと文字化けする
     SetConsoleCP(65001);
+#endif
     load_databases();
     load_box();
 
@@ -430,22 +434,49 @@ int main() {
             std::string subcmd;
             iss >> subcmd;
             if (subcmd == "pokemon") {
-                std::vector<const UserPokemon*> sorted_box;
-                for (const auto& poke : my_box) {
-                    sorted_box.push_back(&poke);
-                }
-                std::sort(sorted_box.begin(), sorted_box.end(), [](const UserPokemon* a, const UserPokemon* b) {
-                    return a->cp > b->cp; // CPが高い順
-                });
+                int id;
+                if (iss >> id) {
+                    auto it = std::find_if(my_box.begin(), my_box.end(), [id](const UserPokemon& poke) {
+                        return poke.id == id;
+                    });
+                    if (it != my_box.end()) {
+                        std::cout << "=== ポケモン詳細情報 ===" << std::endl;
+                        std::cout << "ID: " << it->id << " | 名前: " << it->name
+                                  << " (メガシンカ: " << (it->active_mega.empty() ? "なし" : it->active_mega) << ")" << std::endl;
+                        std::cout << "CP: " << it->cp << " | PL: " << it->pl << std::endl;
+                        std::cout << "個体値: 攻撃 " << it->aiv << " / 防御 " << it->biv << " / HP " << it->hiv << std::endl;
+                        std::cout << "ノーマル技: " << (it->normalatk.empty() ? "未設定" : it->normalatk) << std::endl;
+                        std::cout << "スペシャル技: " << (it->specialatk.empty() ? "未設定" : it->specialatk) << std::endl;
+                        std::cout << "サード技: " << (it->thaadatk.empty() ? "未設定" : it->thaadatk) << std::endl;
+                        std::cout << "メガ固有技: " << (it->active_mega_move.empty() ? "なし" : it->active_mega_move) << std::endl;
+                        std::cout << "特殊状態: シャドウ: " << (it->is_shadow ? "true" : "false")
+                                  << " / ライト: " << (it->is_purified ? "true" : "false")
+                                  << " / キラ: " << (it->is_lucky ? "true" : "false") << std::endl;
+                        std::cout << "相棒ブースト: " << (it->has_buddy_boost ? "true" : "false") << std::endl;
+                        std::cout << "メガレベル: " << it->mega_level << std::endl;
+                        std::cout << "保護状態: " << (it->is_protected ? "true" : "false") << std::endl;
+                    } else {
+                        std::cout << "Error: 指定されたIDのポケモンが見つかりません。" << std::endl;
+                    }
+                } else {
+                    std::vector<const UserPokemon*> sorted_box;
+                    for (const auto& poke : my_box) {
+                        sorted_box.push_back(&poke);
+                    }
+                    std::sort(sorted_box.begin(), sorted_box.end(), [](const UserPokemon* a, const UserPokemon* b) {
+                        return a->cp > b->cp; // CPが高い順
+                    });
 
-                // ヘッダー的なもの（省略してもよいが、表形式っぽく見せるため）
-                // [ID, ポケモン名, CP, PL, 攻撃/防御/HP]
-                for (const auto* poke : sorted_box) {
-                    std::cout << "[" << std::setw(3) << std::right << poke->id << ", "
-                              << std::setw(15) << std::left << poke->name << ", "
-                              << "CP: " << std::setw(4) << std::right << poke->cp << ", "
-                              << "PL: " << std::setw(4) << std::left << poke->pl << ", "
-                              << "IVs: " << poke->aiv << "/" << poke->biv << "/" << poke->hiv << "]" << std::endl;
+                    // ヘッダー的なもの（省略してもよいが、表形式っぽく見せるため）
+                    // [ID, ポケモン名, CP, PL, 攻撃/防御/HP]
+                    for (const auto* poke : sorted_box) {
+                        std::cout << "[" << std::setw(3) << std::right << poke->id << ", "
+                                  << std::setw(15) << std::left << poke->name << ", "
+                                  << "CP: " << std::setw(4) << std::right << poke->cp << ", "
+                                  << "PL: " << std::setw(4) << std::left << poke->pl << ", "
+                                  << "IVs: " << poke->aiv << "/" << poke->biv << "/" << poke->hiv << "]" << std::endl;
+                    }
+                    iss.clear(); // 失敗したストリームの状態をクリアする（後続の処理はないが念のため）
                 }
             } else {
                 std::cout << "Unknown show command: " << subcmd << std::endl;
@@ -460,8 +491,12 @@ int main() {
                         return poke.id == id;
                     });
                     if (it != my_box.end()) {
-                        my_box.erase(it);
-                        // 削除成功メッセージ等（要件に明記はないが、エラーだけは出すとある）
+                        if (it->is_protected) {
+                            std::cout << "Error: このポケモンは保護されているため削除できません。" << std::endl;
+                        } else {
+                            my_box.erase(it);
+                            // 削除成功メッセージ等（要件に明記はないが、エラーだけは出すとある）
+                        }
                     } else {
                         std::cout << "Error: 指定されたIDのポケモンが見つかりません。" << std::endl;
                     }
@@ -525,7 +560,9 @@ int main() {
                         return poke.id == id;
                     });
                     if (it != my_box.end()) {
-                        if (subcmd == "pl") {
+                        if (it->is_protected) {
+                            std::cout << "Error: このポケモンは保護されているため編集できません。" << std::endl;
+                        } else if (subcmd == "pl") {
                             double val;
                             if (iss >> val) {
                                 if (val >= 1.0 && val <= 50.0) {
@@ -576,7 +613,9 @@ int main() {
                         return poke.id == id;
                     });
                     if (it != my_box.end()) {
-                        if (subcmd == "normalatk") {
+                        if (it->is_protected) {
+                            std::cout << "Error: このポケモンは保護されているため編集できません。" << std::endl;
+                        } else if (subcmd == "normalatk") {
                             if (fast_move_db.find(move_name) != fast_move_db.end()) {
                                 it->normalatk = move_name;
                                 std::cout << it->name << "のノーマルアタックを" << move_name << "に更新しました" << std::endl;
@@ -610,23 +649,30 @@ int main() {
                         return poke.id == id;
                     });
                     if (it != my_box.end()) {
-                        bool val = false;
-                        if (val_str == "true" || val_str == "1") {
-                            val = true;
-                        } else if (val_str == "false" || val_str == "0") {
-                            val = false;
+                        if (it->is_protected) {
+                            std::cout << "Error: このポケモンは保護されているため編集できません。" << std::endl;
                         } else {
-                            std::cout << "Error: 値は true/false または 1/0 で指定してください。" << std::endl;
-                            continue;
+                            bool val = false;
+                            bool is_valid = true;
+                            if (val_str == "true" || val_str == "1") {
+                                val = true;
+                            } else if (val_str == "false" || val_str == "0") {
+                                val = false;
+                            } else {
+                                std::cout << "Error: 値は true/false または 1/0 で指定してください。" << std::endl;
+                                is_valid = false;
+                            }
+
+                            if (is_valid) {
+                                if (subcmd == "shadow") it->is_shadow = val;
+                                else if (subcmd == "purified") it->is_purified = val;
+                                else if (subcmd == "lucky") it->is_lucky = val;
+                                else if (subcmd == "buddy") it->has_buddy_boost = val;
+
+                                it->update_cp();
+                                std::cout << it->name << "の" << subcmd << "を" << (val ? "true" : "false") << "に更新しました（現在のCP: " << it->cp << "）" << std::endl;
+                            }
                         }
-
-                        if (subcmd == "shadow") it->is_shadow = val;
-                        else if (subcmd == "purified") it->is_purified = val;
-                        else if (subcmd == "lucky") it->is_lucky = val;
-                        else if (subcmd == "buddy") it->has_buddy_boost = val;
-
-                        it->update_cp();
-                        std::cout << it->name << "の" << subcmd << "を" << (val ? "true" : "false") << "に更新しました（現在のCP: " << it->cp << "）" << std::endl;
                     } else {
                         std::cout << "Error: 指定されたIDのポケモンが見つかりません。" << std::endl;
                     }
@@ -642,16 +688,20 @@ int main() {
                     });
                     if (it != my_box.end()) {
                         bool val = false;
+                        bool is_valid = true;
                         if (val_str == "true" || val_str == "1") {
                             val = true;
                         } else if (val_str == "false" || val_str == "0") {
                             val = false;
                         } else {
                             std::cout << "Error: 値は true/false または 1/0 で指定してください。" << std::endl;
-                            continue;
+                            is_valid = false;
                         }
-                        it->is_protected = val;
-                        std::cout << it->name << "の保護状態を " << (val ? "true" : "false") << " に更新しました" << std::endl;
+
+                        if (is_valid) {
+                            it->is_protected = val;
+                            std::cout << it->name << "の保護状態を " << (val ? "true" : "false") << " に更新しました" << std::endl;
+                        }
                     } else {
                         std::cout << "Error: 指定されたIDのポケモンが見つかりません。" << std::endl;
                     }
@@ -666,7 +716,9 @@ int main() {
                         return poke.id == id;
                     });
                     if (it != my_box.end()) {
-                        if (val >= 0 && val <= 4) {
+                        if (it->is_protected) {
+                            std::cout << "Error: このポケモンは保護されているため編集できません。" << std::endl;
+                        } else if (val >= 0 && val <= 4) {
                             it->mega_level = val;
                             it->update_cp();
                             std::cout << it->name << "のmegalevelを" << val << "に更新しました（現在のCP: " << it->cp << "）" << std::endl;
@@ -687,7 +739,9 @@ int main() {
                         return poke.id == id;
                     });
                     if (it != my_box.end()) {
-                        if (mega_name == "none") {
+                        if (it->is_protected) {
+                            std::cout << "Error: このポケモンは保護されているため編集できません。" << std::endl;
+                        } else if (mega_name == "none") {
                             it->active_mega = "";
                             it->active_mega_move = "";
                             it->update_cp();
